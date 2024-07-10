@@ -1,5 +1,4 @@
-import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_restful import Resource, Api
 from flask_cors import CORS
 import requests
@@ -10,34 +9,30 @@ cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 documentos = []
 
-# Usar variables de entorno para URLs de servicios
-CLIENTE_SERVICE_URL = os.getenv('CLIENTE_SERVICE_URL', 'http://localhost:27776/api/cliente')
-PRODUCTO_SERVICE_URL = os.getenv('PRODUCTO_SERVICE_URL', 'http://localhost:27776/api/producto')
-
 class BE(Resource):
     def post(self):
         body = request.get_json()
-        response = requests.get(f"{CLIENTE_SERVICE_URL}/{body['client']}")
+        response = requests.get("http://localhost:27776/api/cliente/%s" % body['client'])
         cliente = response.json()
         productos = []
         total = 0
         for x in body['products']:
-            response = requests.get(f"{PRODUCTO_SERVICE_URL}/{x['id']}")
+            response = requests.get("http://localhost:27776/api/producto/%s" % x['id'])
             product = response.json()
             if product['stock'] >= int(x['quantity']):
                 product['quantity'] = int(x['quantity'])
-                total += (product['price'] * int(x['quantity']))
+                total += (product['price']*int(x['quantity']))
                 productos.append(product)
             else:
-                return {'message': f"Stock insuficiente del producto: {product['name']}"}, 404
+                return {'message': "Stock insuficiente del producto: %s" % product['name']}, 404
         for x in productos:
-            response = requests.put(f"{PRODUCTO_SERVICE_URL}/{x['id']}/reducirstock", json={'quantity': x['quantity']})
+            response = requests.put("http://localhost:27776/api/producto/%s/reducirstock" % x['id'], json=x['quantity'])
         data = {
             'documento': body['documento'],
             'cliente': cliente,
             'productos': productos,
             'total': total,
-            'id': str(len(documentos) + 1).zfill(6)
+            'id': str(len(documentos)+1).zfill(6)
         }
         documentos.append(data)
         return data
@@ -48,6 +43,25 @@ class BE(Resource):
 
 api.add_resource(BE, '/api/BE')
 
+
+@app.route('/payment', methods=['GET'])
+def show_payment_form():
+    return render_template('payment.html')
+
+
+@app.route('/process_payment', methods=['POST'])
+def process_payment():
+    
+
+
+    success = True 
+    
+    if success:
+        mensaje = "Pago validado correctamente."
+    else:
+        mensaje = "Hubo un problema al validar el pago. Inténtalo de nuevo."
+
+    return jsonify({'message': mensaje})
+
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)
